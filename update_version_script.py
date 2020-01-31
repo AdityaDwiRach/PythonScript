@@ -1,6 +1,8 @@
 import os
-import sys
+import sys, getopt
 import fileinput
+import argparse
+from argparse import RawTextHelpFormatter
 
 fileMakeFull = 'make_full_OTA.sh'
 fileMakeIncrement = 'make_incremental_OTA.sh'
@@ -19,10 +21,9 @@ def findString(file):
 	for num, line in enumerate(openMakeFull, 1):
 		if textCLNTver in line :
 			line_num_CLNT = num
-			print 'found : ', num
+
 		if textOSVer in line :
 			line_num_OS = num
-			print 'found : ', num
 
 	openMakeFull.seek(0)
 	textMakeFull = openMakeFull.readlines()
@@ -33,11 +34,6 @@ def findString(file):
 	global textToSearchOS
 	textToSearchOS = textFullOS[22:None]
 
-	print (line_num_CLNT)
-	print (line_num_OS)
-	print (textToSearchCLNT)
-	print (textToSearchOS)
-
 	openMakeFull.close()
 
 def replaceString(file):
@@ -46,8 +42,24 @@ def replaceString(file):
 
 	fileRead = openMakeFull.read()
 
-	fileCLNTVer = fileRead.replace(textToSearchCLNT, textToReplaceCLNTver+"\n")
-	fileAll = fileCLNTVer.replace(textToSearchOS, textToReplaceOSver+"\n")
+	enterOSver = "\n"
+	enterCLNTver = "\n"
+
+	textToReplaceOSver = textToReplaceOSInput
+	textToReplaceCLNTver = textToReplaceCLNTInput
+
+	if textToReplaceOSInput == '':
+		textToReplaceOSver = textToSearchOS
+		enterOSver = ''
+
+	if textToReplaceCLNTInput == '':
+		textToReplaceCLNTver = textToSearchCLNT
+		enterCLNTver = ''
+
+	fileOSVer = fileRead.replace(textToSearchOS, textToReplaceOSver+enterOSver,1)
+	fileAll = fileOSVer.replace(textToSearchCLNT, textToReplaceCLNTver+enterCLNTver,1)
+	
+	openMakeFull.close()
 
 	openMakeFull = open(file, "w")
 	openMakeFull.write(fileAll)
@@ -61,15 +73,37 @@ def replaceMakeIncrement():
 	findString(fileMakeIncrement)
 	replaceString(fileMakeIncrement)
 
+def helpMessage():
+	parser = argparse.ArgumentParser(
+		description = 'Example = \n\tpython update_version_script.py -o ID30S-QD-1.2.5 -c 1.0.2 \n\tpython update_version_script.py -o ID30S-QD-1.3.5 \n\tpython update_version_script.py -c 1.2.1',
+		usage = 'python update_version_script.py -o|--os <os_version> -c|--clnt <clnt_version>',
+		formatter_class=RawTextHelpFormatter)
+	parser.add_argument("-o", "--os", type=str, help='the updated os version')
+	parser.add_argument("-c", "--clnt", type=str, help='the updated client version')
+	args = parser.parse_args()
+
 if __name__ == "__main__":
 
-	print ("Text to replace for TSM_OS_VERSION : ")
-	textToReplaceOSver = raw_input("> ")
+	helpMessage()
 
-	print ("Text to replace for TSM_OS_CLIENT_VERSION : ")
-	textToReplaceCLNTver = raw_input("> ")
+	textToReplaceOSInput = ''
+	textToReplaceCLNTInput = ''
+
+	# get all arguments from command line
+	myopt, args = getopt.getopt(sys.argv[1:],"o:c:")
+
+	# pass the argument into each variable
+	for c, i in myopt:
+		if c == '-o':
+			textToReplaceOSInput = "\""+i+"\""
+		elif c == '-c':
+			textToReplaceCLNTInput = "\""+i+"\""
 
 	replaceMakeFull()
 	replaceMakeIncrement()
 
-raw_input('\n\n Press Enter to Exit...')
+	fileMakeFullPath = os.path.abspath(fileMakeFull)
+	fileMakeIncrementPath = os.path.abspath(fileMakeIncrement)
+
+	os.system("git add " + fileMakeFullPath + " " + fileMakeIncrementPath)
+	os.system("git commit")
